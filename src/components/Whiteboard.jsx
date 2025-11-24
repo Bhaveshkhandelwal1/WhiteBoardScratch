@@ -55,19 +55,20 @@ const Whiteboard = ({ user }) => {
       if (roomData) {
         setIsHost(roomData.hostId === user.uid)
         
+        // Update strokes - handle both empty object and undefined
         if (roomData.strokes) {
           strokesRef.current = roomData.strokes
-          redrawCanvas()
+        } else {
+          strokesRef.current = {}
         }
+        redrawCanvas()
       }
     })
 
     // Subscribe to text annotations
     const unsubscribeTexts = subscribeToTexts(roomId, (texts) => {
-      if (texts) {
-        textsRef.current = texts
-        redrawCanvas()
-      }
+      textsRef.current = texts || {}
+      redrawCanvas()
     })
 
     // Monitor connection status
@@ -170,12 +171,19 @@ const Whiteboard = ({ user }) => {
       strokesRef.current[strokeId] = stroke
       redrawCanvas()
     }
+
+    if (currentTool === 'eraser') {
+      setIsDrawing(true)
+      lastPointRef.current = point
+      // Erase at the starting point
+      await eraseAtPoint(point)
+    }
   }
 
   const handleMove = async (e) => {
     e.preventDefault()
     
-    if (!isDrawing || currentTool !== 'pen') return
+    if (!isDrawing) return
 
     const point = getEventPoint(e)
     const distance = lastPointRef.current
@@ -185,22 +193,30 @@ const Whiteboard = ({ user }) => {
         )
       : 0
 
-    // Only add point if moved significantly (optimization)
-    if (distance < 2) return
+    if (currentTool === 'pen') {
+      // Only add point if moved significantly (optimization)
+      if (distance < 2) return
 
-    lastPointRef.current = point
+      lastPointRef.current = point
 
-    // Use the current stroke ID we're drawing
-    const strokeId = currentStrokeIdRef.current
-    if (strokeId && strokesRef.current[strokeId]) {
-      const stroke = strokesRef.current[strokeId]
-      stroke.points.push(point)
-      
-      // Update in database
-      const strokeRef = ref(database, `rooms/${roomId}/strokes/${strokeId}`)
-      await update(strokeRef, { points: stroke.points })
-      
-      redrawCanvas()
+      // Use the current stroke ID we're drawing
+      const strokeId = currentStrokeIdRef.current
+      if (strokeId && strokesRef.current[strokeId]) {
+        const stroke = strokesRef.current[strokeId]
+        stroke.points.push(point)
+        
+        // Update in database
+        const strokeRef = ref(database, `rooms/${roomId}/strokes/${strokeId}`)
+        await update(strokeRef, { points: stroke.points })
+        
+        redrawCanvas()
+      }
+    } else if (currentTool === 'eraser') {
+      // Erase continuously as we drag
+      if (distance < 2) return
+
+      lastPointRef.current = point
+      await eraseAtPoint(point)
     }
   }
 
@@ -212,32 +228,44 @@ const Whiteboard = ({ user }) => {
     currentStrokeIdRef.current = null
   }
 
-  const handleEraserClick = async (e) => {
-    e.preventDefault()
-    const point = getEventPoint(e)
+  const eraseAtPoint = async (point) => {
+    const eraserSize = strokeWidth * 3 // Make eraser size relative to stroke width
     
-    // Find stroke at this point
-    const strokeToDelete = Object.entries(strokesRef.current).find(([id, stroke]) => {
-      if (!stroke.points || stroke.points.length === 0) return false
+    // Get current strokes snapshot to avoid stale data
+    const currentStrokes = { ...strokesRef.current }
+    
+    // Find strokes that intersect with the eraser point
+    const strokesToDelete = Object.entries(currentStrokes).filter(([id, stroke]) => {
+      if (!stroke || !stroke.points || stroke.points.length === 0) return false
       
+      // Check if any point in the stroke is within eraser range
       return stroke.points.some(p => {
         const dist = Math.sqrt(Math.pow(p.x - point.x, 2) + Math.pow(p.y - point.y, 2))
-        return dist < stroke.width * 2
+        return dist < Math.max(eraserSize, stroke.width * 2)
       })
     })
 
-    if (strokeToDelete) {
-      await removeStroke(roomId, strokeToDelete[0])
+    // Delete all intersecting strokes and update local ref immediately
+    for (const [strokeId] of strokesToDelete) {
+      delete strokesRef.current[strokeId]
+      await removeStroke(roomId, strokeId)
     }
+    
+    // Redraw immediately after local update
+    redrawCanvas()
 
     // Also check text annotations
-    const textToDelete = Object.entries(textsRef.current).find(([id, text]) => {
+    const currentTexts = { ...textsRef.current }
+    const textToDelete = Object.entries(currentTexts).find(([id, text]) => {
+      if (!text) return false
       const dist = Math.sqrt(Math.pow(text.x - point.x, 2) + Math.pow(text.y - point.y, 2))
       return dist < 50
     })
 
     if (textToDelete) {
+      delete textsRef.current[textToDelete[0]]
       await removeTextAnnotation(roomId, textToDelete[0])
+      redrawCanvas()
     }
   }
 
@@ -264,6 +292,10 @@ const Whiteboard = ({ user }) => {
   const handleClearCanvas = async () => {
     if (window.confirm('Are you sure you want to clear the entire canvas?')) {
       await clearCanvas(roomId)
+      // Update local refs immediately
+      strokesRef.current = {}
+      textsRef.current = {}
+      redrawCanvas()
     }
   }
 
@@ -357,11 +389,11 @@ const Whiteboard = ({ user }) => {
         <div className="canvas-container">
           <canvas
             ref={canvasRef}
-            onMouseDown={currentTool === 'eraser' ? handleEraserClick : handleStart}
+            onMouseDown={handleStart}
             onMouseMove={handleMove}
             onMouseUp={handleEnd}
             onMouseLeave={handleEnd}
-            onTouchStart={currentTool === 'eraser' ? handleEraserClick : handleStart}
+            onTouchStart={handleStart}
             onTouchMove={handleMove}
             onTouchEnd={handleEnd}
             className="whiteboard-canvas"

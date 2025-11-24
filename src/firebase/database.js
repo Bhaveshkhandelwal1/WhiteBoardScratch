@@ -35,7 +35,11 @@ export const removeStroke = (roomId, strokeId) => {
 
 export const clearCanvas = (roomId) => {
   const strokesRef = ref(database, `rooms/${roomId}/strokes`)
-  return set(strokesRef, {})
+  const textsRef = ref(database, `rooms/${roomId}/texts`)
+  return Promise.all([
+    set(strokesRef, {}),
+    set(textsRef, {})
+  ])
 }
 
 export const subscribeToRoom = (roomId, callback) => {
