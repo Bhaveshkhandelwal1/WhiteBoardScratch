@@ -1,0 +1,152 @@
+.room-manager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.room-manager-card {
+  background: white;
+  border-radius: 12px;
+  padding: 40px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
+
+.room-manager-card h2 {
+  font-size: 24px;
+  margin-bottom: 30px;
+  color: #333;
+  text-align: center;
+}
+
+.room-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.action-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.action-section h3 {
+  font-size: 18px;
+  color: #333;
+  margin: 0;
+}
+
+.action-section p {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.action-button {
+  padding: 14px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.create-button {
+  background: #667eea;
+  color: white;
+}
+
+.create-button:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.create-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.divider {
+  text-align: center;
+  position: relative;
+  margin: 10px 0;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #e0e0e0;
+}
+
+.divider span {
+  background: white;
+  padding: 0 15px;
+  color: #999;
+  font-size: 12px;
+  position: relative;
+}
+
+.join-input-group {
+  display: flex;
+  gap: 10px;
+}
+
+.room-id-input {
+  flex: 1;
+  padding: 14px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 20px;
+  text-align: center;
+  letter-spacing: 8px;
+  font-weight: 600;
+  transition: border-color 0.2s;
+}
+
+.room-id-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.join-button {
+  background: #48bb78;
+  color: white;
+  min-width: 100px;
+}
+
+.join-button:hover {
+  background: #38a169;
+}
+
+.error-message {
+  background: #fee;
+  color: #c33;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .room-manager-card {
+    padding: 30px 20px;
+  }
+
+  .join-input-group {
+    flex-direction: column;
+  }
+
+  .join-button {
+    width: 100%;
+  }
+}
+
