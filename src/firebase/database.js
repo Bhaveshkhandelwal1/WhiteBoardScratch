@@ -1,4 +1,20 @@
-import { ref, set, push, onValue, remove, update } from 'firebase/database'
+import {
+  ref,
+  set,
+  push,
+  onValue,
+  remove,
+  update,
+  query,
+  orderByChild,
+  orderByKey,
+  orderByValue,
+  limitToFirst,
+  limitToLast,
+  startAt,
+  endAt,
+  equalTo
+} from 'firebase/database'
 import { database } from './config'
 
 export const createRoom = (roomId, hostId) => {
@@ -28,9 +44,27 @@ export const addStroke = (roomId, stroke) => {
   return push(strokesRef, stroke)
 }
 
+// Subscribe only to strokes for a room (used by Whiteboard.jsx)
+export const subscribeToStrokes = (roomId, callback) => {
+  const strokesRef = ref(database, `rooms/${roomId}/strokes`)
+  return onValue(strokesRef, (snapshot) => {
+    if (snapshot.exists()) {
+      callback(snapshot.val())
+    } else {
+      callback({})
+    }
+  })
+}
+
 export const removeStroke = (roomId, strokeId) => {
   const strokeRef = ref(database, `rooms/${roomId}/strokes/${strokeId}`)
   return remove(strokeRef)
+}
+
+// Update an existing stroke (used for adding new points while drawing)
+export const updateStroke = (roomId, strokeId, data) => {
+  const strokeRef = ref(database, `rooms/${roomId}/strokes/${strokeId}`)
+  return update(strokeRef, data)
 }
 
 export const clearCanvas = (roomId) => {
@@ -71,4 +105,96 @@ export const subscribeToTexts = (roomId, callback) => {
     }
   })
 }
+
+export const getFirstRoomsByCreatedAt = (limit) => {
+  const roomsRef = ref(database, 'rooms')
+  const q = query(roomsRef, orderByChild('createdAt'), limitToFirst(limit))
+
+  return new Promise((resolve) => {
+    onValue(
+      q,
+      (snapshot) => {
+        resolve(snapshot.val() || {})
+      },
+      {
+        onlyOnce: true
+      }
+    )
+  })
+}
+
+export const getRoomsByCreatedAtRange = (startTimestamp, endTimestamp) => {
+  const roomsRef = ref(database, 'rooms')
+  const q = query(
+    roomsRef,
+    orderByChild('createdAt'),
+    startAt(startTimestamp),
+    endAt(endTimestamp)
+  )
+
+  return new Promise((resolve) => {
+    onValue(
+      q,
+      (snapshot) => {
+        resolve(snapshot.val() || {})
+      },
+      {
+        onlyOnce: true
+      }
+    )
+  })
+}
+
+export const getRoomsByHost = (hostId) => {
+  const roomsRef = ref(database, 'rooms')
+  const q = query(roomsRef, orderByChild('hostId'), equalTo(hostId))
+
+  return new Promise((resolve) => {
+    onValue(
+      q,
+      (snapshot) => {
+        resolve(snapshot.val() || {})
+      },
+      {
+        onlyOnce: true
+      }
+    )
+  })
+}
+
+
+export const getLastRoomsByKey = (limit) => {
+  const roomsRef = ref(database, 'rooms')
+  const q = query(roomsRef, orderByKey(), limitToLast(limit))
+
+  return new Promise((resolve) => {
+    onValue(
+      q,
+      (snapshot) => {
+        resolve(snapshot.val() || {})
+      },
+      {
+        onlyOnce: true
+      }
+    )
+  })
+}
+
+export const getOnlineUsersOrderedByValue = () => {
+  const onlineRef = ref(database, 'onlineUsers')
+  const q = query(onlineRef, orderByValue())
+
+  return new Promise((resolve) => {
+    onValue(
+      q,
+      (snapshot) => {
+        resolve(snapshot.val() || {})
+      },
+      {
+        onlyOnce: true
+      }
+    )
+  })
+}
+
 

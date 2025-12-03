@@ -3,15 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { logout } from '../firebase/auth'
 import {
   subscribeToRoom,
+  subscribeToStrokes,
   subscribeToTexts,
   addStroke,
+  updateStroke,
   removeStroke,
   addTextAnnotation,
   removeTextAnnotation,
   clearCanvas
 } from '../firebase/database'
-import { ref, update } from 'firebase/database'
-import { database } from '../firebase/config'
 import './Whiteboard.css'
 
 const Whiteboard = ({ user }) => {
@@ -50,19 +50,19 @@ const Whiteboard = ({ user }) => {
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
 
-    // Subscribe to room changes
+    // Subscribe to room metadata
     const unsubscribeRoom = subscribeToRoom(roomId, (roomData) => {
       if (roomData) {
         setIsHost(roomData.hostId === user.uid)
-        
-        // Update strokes - handle both empty object and undefined
-        if (roomData.strokes) {
-          strokesRef.current = roomData.strokes
-        } else {
-          strokesRef.current = {}
-        }
-        redrawCanvas()
+      } else {
+        setIsHost(false)
       }
+    })
+
+    // Subscribe to strokes collection
+    const unsubscribeStrokes = subscribeToStrokes(roomId, (strokes) => {
+      strokesRef.current = strokes || {}
+      redrawCanvas()
     })
 
     // Subscribe to text annotations
@@ -83,6 +83,7 @@ const Whiteboard = ({ user }) => {
     return () => {
       window.removeEventListener('resize', resizeCanvas)
       unsubscribeRoom()
+      unsubscribeStrokes()
       unsubscribeTexts()
     }
   }, [roomId, user.uid])
@@ -205,10 +206,7 @@ const Whiteboard = ({ user }) => {
         const stroke = strokesRef.current[strokeId]
         stroke.points.push(point)
         
-        // Update in database
-        const strokeRef = ref(database, `rooms/${roomId}/strokes/${strokeId}`)
-        await update(strokeRef, { points: stroke.points })
-        
+        await updateStroke(roomId, strokeId, { points: stroke.points })
         redrawCanvas()
       }
     } else if (currentTool === 'eraser') {
@@ -275,15 +273,20 @@ const Whiteboard = ({ user }) => {
       return
     }
 
-    await addTextAnnotation(roomId, {
-      text: textValue,
-      x: textPosition.x,
-      y: textPosition.y,
-      color: currentColor,
-      size: strokeWidth * 5,
-      userId: user.uid,
-      timestamp: Date.now()
-    })
+    try {
+      const ref = await addTextAnnotation(roomId, {
+        text: textValue,
+        x: textPosition.x,
+        y: textPosition.y,
+        color: currentColor,
+        size: strokeWidth * 5,
+        userId: user.uid,
+        timestamp: Date.now()
+      })
+      console.log('Text annotation added with key:', ref.key)
+    } catch (err) {
+      console.error('Failed to add text annotation:', err)
+    }
 
     setTextValue('')
     setShowTextInput(false)
