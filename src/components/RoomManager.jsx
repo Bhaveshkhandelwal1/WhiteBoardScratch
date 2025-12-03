@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createRoom } from '../firebase/database'
+import { createRoom, getRoomsByHost, getFirstRoomsByCreatedAt, transformData } from '../firebase/database'
 import './RoomManager.css'
 
 const RoomManager = ({ user }) => {
   const [roomId, setRoomId] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [myRooms, setMyRooms] = useState([])
+  const [oldestRooms, setOldestRooms] = useState([])
   const navigate = useNavigate()
 
   const generateRoomId = () => {
@@ -37,6 +39,28 @@ const RoomManager = ({ user }) => {
     
     navigate(`/room/${roomId}`)
   }
+
+  // Load rooms created by this user (filtering: orderByChild + equalTo)
+  // and a small list of oldest rooms (ordering: orderByChild + limitToFirst)
+  useEffect(() => {
+    const loadRooms = async () => {
+      try {
+        // Rooms where hostId == current user
+        const myRoomsData = await getRoomsByHost(user.uid)
+        setMyRooms(transformData(myRoomsData))
+
+        // Oldest 5 rooms overall
+        const oldestData = await getFirstRoomsByCreatedAt(5)
+        setOldestRooms(transformData(oldestData))
+      } catch (err) {
+        console.error('Failed to load rooms for dashboard:', err)
+      }
+    }
+
+    if (user?.uid) {
+      loadRooms()
+    }
+  }, [user?.uid])
 
   return (
     <div className="room-manager">
@@ -85,6 +109,46 @@ const RoomManager = ({ user }) => {
           </div>
 
           {error && <div className="error-message">{error}</div>}
+        </div>
+
+        {/* Demonstration of Firebase ordering + filtering output */}
+        <div className="room-lists">
+          <div className="room-list-section">
+            <h3>My Rooms (orderByChild('hostId') + equalTo)</h3>
+            {myRooms.length === 0 ? (
+              <p className="room-list-empty">You have not created any rooms yet.</p>
+            ) : (
+              <ul className="room-list">
+                {myRooms.map((room) => (
+                  <li key={room.id} className="room-list-item">
+                    <span className="room-list-id">ID: {room.id}</span>
+                    <span className="room-list-meta">
+                      Created at: {new Date(room.createdAt).toLocaleString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="room-list-section">
+            <h3>Oldest Rooms (orderByChild('createdAt') + limitToFirst)</h3>
+            {oldestRooms.length === 0 ? (
+              <p className="room-list-empty">No rooms found yet.</p>
+            ) : (
+              <ul className="room-list">
+                {oldestRooms.map((room) => (
+                  <li key={room.id} className="room-list-item">
+                    <span className="room-list-id">ID: {room.id}</span>
+                    <span className="room-list-meta">
+                      Host: {room.hostId || 'Unknown'} |{' '}
+                      {new Date(room.createdAt).toLocaleString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
     </div>

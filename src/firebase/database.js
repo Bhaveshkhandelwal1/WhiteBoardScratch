@@ -5,6 +5,7 @@ import {
   onValue,
   remove,
   update,
+  get,
   query,
   orderByChild,
   orderByKey,
@@ -106,21 +107,34 @@ export const subscribeToTexts = (roomId, callback) => {
   })
 }
 
-export const getFirstRoomsByCreatedAt = (limit) => {
-  const roomsRef = ref(database, 'rooms')
-  const q = query(roomsRef, orderByChild('createdAt'), limitToFirst(limit))
+// Helper: convert Firebase object { id: value } to array [{ id, ...value }]
+export const transformData = (dataObj) => {
+  if (!dataObj) return []
+  return Object.entries(dataObj).map(([id, value]) => ({
+    id,
+    ...value
+  }))
+}
 
-  return new Promise((resolve) => {
-    onValue(
-      q,
-      (snapshot) => {
-        resolve(snapshot.val() || {})
-      },
-      {
-        onlyOnce: true
-      }
-    )
-  })
+// Get the first N rooms ordered by createdAt (oldest first)
+// Implemented by fetching all rooms once and sorting/filtering on the client
+// so it works even if Realtime Database indexes are not configured.
+export const getFirstRoomsByCreatedAt = async (limit) => {
+  const roomsRef = ref(database, 'rooms')
+  const snapshot = await get(roomsRef)
+  const allRooms = snapshot.val() || {}
+
+  const sorted = Object.entries(allRooms)
+    .map(([id, value]) => ({ id, ...value }))
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+    .slice(0, limit)
+
+  // Return back in object form to keep existing transformData usage
+  return sorted.reduce((acc, room) => {
+    const { id, ...rest } = room
+    acc[id] = rest
+    return acc
+  }, {})
 }
 
 export const getRoomsByCreatedAtRange = (startTimestamp, endTimestamp) => {
@@ -145,21 +159,21 @@ export const getRoomsByCreatedAtRange = (startTimestamp, endTimestamp) => {
   })
 }
 
-export const getRoomsByHost = (hostId) => {
+// Get all rooms where hostId matches, by fetching once and filtering client-side.
+// This avoids needing .indexOn('hostId') in database rules.
+export const getRoomsByHost = async (hostId) => {
   const roomsRef = ref(database, 'rooms')
-  const q = query(roomsRef, orderByChild('hostId'), equalTo(hostId))
+  const snapshot = await get(roomsRef)
+  const allRooms = snapshot.val() || {}
 
-  return new Promise((resolve) => {
-    onValue(
-      q,
-      (snapshot) => {
-        resolve(snapshot.val() || {})
-      },
-      {
-        onlyOnce: true
-      }
-    )
-  })
+  const filteredEntries = Object.entries(allRooms).filter(
+    ([, value]) => value && value.hostId === hostId
+  )
+
+  return filteredEntries.reduce((acc, [id, value]) => {
+    acc[id] = value
+    return acc
+  }, {})
 }
 
 
